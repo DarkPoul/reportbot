@@ -7,17 +7,12 @@ import esvar.ua.botreport.session.UserSession;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 import static esvar.ua.botreport.bot.EveningReportBot.DAILY_PLAN;
 
 @Repository
 public class GoogleSheetsReportRepository {
-
-    private static final ZoneId UA_ZONE = ZoneId.of("Europe/Kyiv");
-    private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("dd.MM.yyyy");
 
     private final Sheets sheets;
     private final GoogleSheetsProperties props;
@@ -101,16 +96,64 @@ public class GoogleSheetsReportRepository {
                 nextFullName           // Завтра на зміні
         );
 
-        var body = new com.google.api.services.sheets.v4.model.ValueRange()
-                .setValues(List.of(row));
+        int existingRow = findReportRow(today, storeName);
+        var body = new com.google.api.services.sheets.v4.model.ValueRange().setValues(List.of(row));
 
-        String range = "'" + props.sheetName() + "'!A1";
+        if (existingRow > 0) {
+            String updateRange = "'" + props.sheetName() + "'!A" + existingRow + ":AB" + existingRow;
+
+            sheets.spreadsheets().values()
+                    .update(props.spreadsheetId(), updateRange, body)
+                    .setValueInputOption("USER_ENTERED")
+                    .execute();
+            return;
+        }
+
+        String appendRange = "'" + props.sheetName() + "'!A1";
 
         sheets.spreadsheets().values()
-                .append(props.spreadsheetId(), range, body)
+                .append(props.spreadsheetId(), appendRange, body)
                 .setValueInputOption("USER_ENTERED")
                 .setInsertDataOption("INSERT_ROWS")
                 .execute();
+    }
+
+    private int findReportRow(String date, String storeName) throws Exception {
+        String range = "'" + props.sheetName() + "'!A:B";
+
+        var resp = sheets.spreadsheets().values()
+                .get(props.spreadsheetId(), range)
+                .execute();
+
+        List<List<Object>> values = resp.getValues();
+        if (values == null || values.size() <= 1) {
+            return -1;
+        }
+
+        String normalizedDate = nn(date).trim();
+        String normalizedStore = nn(storeName).trim();
+
+        for (int i = 1; i < values.size(); i++) {
+            List<Object> row = values.get(i);
+            if (row == null || row.isEmpty()) {
+                continue;
+            }
+
+            String rowDate = nn(asString(row, 0)).trim();
+            String rowStoreName = nn(asString(row, 1)).trim();
+
+            if (normalizedDate.equals(rowDate) && normalizedStore.equalsIgnoreCase(rowStoreName)) {
+                return i + 1;
+            }
+        }
+
+        return -1;
+    }
+
+    private String asString(List<Object> row, int index) {
+        if (index >= row.size()) return "";
+        Object value = row.get(index);
+        return value == null ? "" : value.toString();
     }
 
     public void ensureHeader() throws Exception {

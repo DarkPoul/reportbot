@@ -30,7 +30,6 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Optional;
 import java.util.function.Consumer;
 
@@ -105,6 +104,18 @@ public class EveningReportBot implements SpringLongPollingBot, LongPollingSingle
                 session.setNewClients(null);
                 session.setOldClients(null);
                 session.setCash(null);
+                session.setOldCash(null);
+                session.setNoClients(null);
+                session.setCashPayment(null);
+                session.setCashF(null);
+                session.setCard(null);
+                session.setOnlineCard(null);
+                session.setOnlineCash(null);
+                session.setTaxi(null);
+                session.setAttorney(null);
+                session.setCollection(null);
+                session.setWithdrawal(null);
+                session.setExpenses(null);
 
                 sendChooseLocation(chatId);
                 return;
@@ -222,10 +233,17 @@ public class EveningReportBot implements SpringLongPollingBot, LongPollingSingle
                 if (session.getOnlineCard() == null) session.setOnlineCard(BigDecimal.ZERO);
                 if (session.getOnlineCash() == null) session.setOnlineCash(BigDecimal.ZERO);
 
-                session.setStep(UserSession.Step.WAIT_PAYMENT_MENU);
-                sendPaymentMenu(chatId);
-
+                session.setStep(UserSession.Step.WAIT_CASH);
                 sendText(chatId, "Введіть готівку в касі (UAH), наприклад: 2500 або 2500.00");
+                return;
+            }
+
+            if (handleMoneyStep(session, text, chatId,
+                    UserSession.Step.WAIT_CASH,
+                    session::setCash,
+                    UserSession.Step.WAIT_PAYMENT_MENU,
+                    "Внесіть відповідні типи оплат:")) {
+                sendPaymentMenu(chatId);
                 return;
             }
 
@@ -358,11 +376,7 @@ public class EveningReportBot implements SpringLongPollingBot, LongPollingSingle
                     UserSession.Step.WAIT_CASH_EXPENSES,
                     session::setExpenses,
                     UserSession.Step.WAIT_NEXT_NAME,
-                    "Хто виходить завтра на зміну?")) {
-
-                sendText(chatId, "");
-                return;
-            }
+                    "Хто виходить завтра на зміну?")) return;
 
             if (session.getStep() == UserSession.Step.WAIT_NEXT_NAME) {
                 if (text.length() < 3) {
@@ -397,13 +411,11 @@ public class EveningReportBot implements SpringLongPollingBot, LongPollingSingle
                         return;
                     }
 
-                    BigDecimal newFact = safe(currentStore.fact()).add(safe(session.getTurnover()));
-                    log.info("Факт {}", newFact);
-                    BigDecimal newCash = safe(currentStore.cash())
-                            .add(safe(session.getCash()))
-                            .add(safe(session.getCashF()));
-                    log.info("Готівка {}", newCash);
-                    shopSheetsRepository.updateFactAndCash(session.getLocation(), newFact, newCash);
+                    BigDecimal factDelta = safe(session.getTurnover());
+                    BigDecimal cashDelta = safe(session.getCash());
+                    log.info("Додаємо до Shop. Факт += {}, Готівка += {}", factDelta, cashDelta);
+                    shopSheetsRepository.addToFactAndCash(session.getLocation(), factDelta, cashDelta);
+                    storeCatalog.reload();
 
                     sendText(chatId, "✅ Звіт збережено в Google таблицю (лист \"Звіти\").");
                 } catch (Exception e) {
@@ -674,13 +686,6 @@ public class EveningReportBot implements SpringLongPollingBot, LongPollingSingle
     }
 
     public record StoreInfo(String storeName, String address) {}
-
-    private static final Map<String, StoreInfo> STORE_BY_LOCATION = Map.of(
-            "Бровари", new StoreInfo("Green State", "м. Бровари, Київська 294/1"),
-            "Ірпінь", new StoreInfo("U420", "м. Ірпінь, Центральна 2а"),
-            "Борщагівка", new StoreInfo("U420", "м. Софіївська Борщагівка, Соборна 126/1"),
-            "Святопетрівське", new StoreInfo("U420", "м. Святопетрівське, Богдана Хмельницького 2")
-    );
 
     private boolean handlePaymentValue(
             UserSession session,
