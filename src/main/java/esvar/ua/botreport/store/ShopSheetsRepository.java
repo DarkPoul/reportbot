@@ -97,6 +97,26 @@ public class ShopSheetsRepository {
                 .execute();
     }
 
+    public void addToFactAndCash(String storeKey, BigDecimal factDelta, BigDecimal cashDelta) throws Exception {
+        int rowIndex = findRowByKey(storeKey);
+
+        String readRange = "'" + props.shopSheetName() + "'!E" + rowIndex + ":G" + rowIndex;
+        var resp = sheets.spreadsheets().values()
+                .get(props.spreadsheetId(), readRange)
+                .execute();
+
+        List<List<Object>> values = resp.getValues();
+        List<Object> row = (values == null || values.isEmpty()) ? List.of() : values.getFirst();
+
+        BigDecimal currentFact = getBigDecimal(row, 0);
+        BigDecimal currentCash = getBigDecimal(row, 2);
+
+        BigDecimal nextFact = nvl(currentFact).add(nvl(factDelta));
+        BigDecimal nextCash = nvl(currentCash).add(nvl(cashDelta));
+
+        updateFactAndCash(storeKey, nextFact, nextCash);
+    }
+
     private int findRowByKey(String storeKey) throws Exception {
         if (storeKey == null || storeKey.isBlank()) {
             throw new IllegalArgumentException("storeKey is blank");
@@ -134,5 +154,9 @@ public class ShopSheetsRepository {
         if (v == null) return 0;
         // USER_ENTERED норм сприймає Number, краще передати double
         return v.doubleValue();
+    }
+
+    private BigDecimal nvl(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
     }
 }
