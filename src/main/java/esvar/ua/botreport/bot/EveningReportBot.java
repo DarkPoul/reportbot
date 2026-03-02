@@ -576,13 +576,15 @@ public class EveningReportBot implements SpringLongPollingBot, LongPollingSingle
         String storeName = (store == null) ? "Невідомий магазин" : store.name();
         String address = (store == null) ? s.getLocation() : store.address();
         BigDecimal plan = (store == null || store.plan() == null) ? DAILY_PLAN : store.plan();
+        BigDecimal fact = (store == null || store.fact() == null)
+                ? safe(s.getOldCash()).add(safe(s.getTurnover()))
+                : store.fact();
 
         String today = LocalDate.now(UA_ZONE).format(DATE_FORMAT);
 
         BigDecimal averageCheck = calculateAverageCheck(s.getTurnover(), s.getChecks());
         String conversion = calculateConversion(s.getChecks(), s.getNoClients());
 
-        BigDecimal fact = safe(s.getOldCash()).add(safe(s.getTurnover()));
         String planPercent = calculatePlanPercent(fact, plan);
 
         return (storeName + "\n" + address).stripTrailing()
