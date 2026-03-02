@@ -96,7 +96,7 @@ public class GoogleSheetsReportRepository {
                 nextFullName           // Завтра на зміні
         );
 
-        int existingRow = findReportRow(today, storeName);
+        int existingRow = findReportRow(today, storeAddress);
         var body = new com.google.api.services.sheets.v4.model.ValueRange().setValues(List.of(row));
 
         if (existingRow > 0) {
@@ -118,8 +118,8 @@ public class GoogleSheetsReportRepository {
                 .execute();
     }
 
-    private int findReportRow(String date, String storeName) throws Exception {
-        String range = "'" + props.sheetName() + "'!A:B";
+    private int findReportRow(String date, String storeAddress) throws Exception {
+        String range = "'" + props.sheetName() + "'!A:C";
 
         var resp = sheets.spreadsheets().values()
                 .get(props.spreadsheetId(), range)
@@ -131,7 +131,7 @@ public class GoogleSheetsReportRepository {
         }
 
         String normalizedDate = nn(date).trim();
-        String normalizedStore = nn(storeName).trim();
+        String normalizedAddress = nn(storeAddress).trim();
 
         for (int i = 1; i < values.size(); i++) {
             List<Object> row = values.get(i);
@@ -140,9 +140,9 @@ public class GoogleSheetsReportRepository {
             }
 
             String rowDate = nn(asString(row, 0)).trim();
-            String rowStoreName = nn(asString(row, 1)).trim();
+            String rowStoreAddress = nn(asString(row, 2)).trim();
 
-            if (normalizedDate.equals(rowDate) && normalizedStore.equalsIgnoreCase(rowStoreName)) {
+            if (normalizedDate.equals(rowDate) && normalizedAddress.equalsIgnoreCase(rowStoreAddress)) {
                 return i + 1;
             }
         }
